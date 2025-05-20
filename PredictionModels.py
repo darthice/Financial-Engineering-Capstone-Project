@@ -421,3 +421,237 @@ class CNNPredictor:
             r2_tr,
             r2_te
         )
+
+
+
+class TransformerPredictor:
+    def __init__(
+        self,
+        ticker: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 20,
+        batch_size: int = 32,
+       
+    ):
+       
+        df_t = features_target[ticker]
+        X = df_t.drop(columns="target").values
+        y = df_t["target"].values
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y,
+            test_size=test_size,
+            shuffle=False,
+            random_state=random_state
+        )
+
+        scaler = StandardScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
+
+        self.X_train = X_train_s.reshape((X_train_s.shape[0], 1, X_train_s.shape[1]))
+        self.X_test = X_test_s.reshape((X_test_s.shape[0], 1, X_test_s.shape[1]))
+        self.y_train, self.y_test = y_train, y_test
+
+        
+        inputs = Input(shape=(1, X_train_s.shape[1]))
+
+        x = MultiHeadAttention(num_heads=num_heads, key_dim=d_model)(inputs, inputs)
+        x = Dropout(dropout_rate)(x)
+        x = Add()([inputs, x])
+        x = LayerNormalization()(x)
+
+        x = GlobalAveragePooling1D()(x)
+        x = Dense(50, activation="relu")(x)
+        outputs = Dense(1)(x)
+
+        self.model = Model(inputs, outputs)
+        self.model.compile(optimizer=Adam(learning_rate=0.001), loss="mse")
+
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def make_forecast(self):
+        # Train the model
+        self.model.fit(
+            self.X_train, self.y_train,
+            epochs=self.epochs,
+            batch_size=self.batch_size,
+            verbose=0
+        )
+
+        
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test  = self.model.predict(self.X_test)
+
+       
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test,  y_pred_test)
+        last_pred = float(y_pred_test[-1])
+
+        return (
+            last_pred,
+            round(r2_tr * 100, 2),
+            r2_tr,
+            r2_te
+        )
+
+
+class XGBoostPredictor:
+     def __init__(
+        self,
+        ticker: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 20,
+        batch_size: int = 32,
+    ):
+        df_t = features_target[ticker]
+        X = df_t.drop(columns="target").values
+        y = df_t["target"].values
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y,
+            test_size=test_size,
+            shuffle=False,
+            random_state=random_state
+        )
+
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
+
+        self.X_train, self.X_test = X_train_s, X_test_s
+        self.y_train, self.y_test = y_train, y_test
+
+        self.model = xgb.XGBRegressor(
+            n_estimators=n_estimators,
+            learning_rate=learning_rate,
+            max_depth=max_depth,
+            random_state=random_state,
+            objective='reg:squarederror',
+            verbosity=0
+        )
+
+    def make_forecast(self):
+        self.model.fit(self.X_train, self.y_train)
+
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test  = self.model.predict(self.X_test)
+
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test,  y_pred_test)
+        last_pred = float(y_pred_test[-1])
+
+        return (
+            last_pred,
+            round(r2_tr * 100, 2),
+            r2_tr,
+            r2_te
+        )
+
+
+
+class MLPPredictor:
+     def __init__(
+        self,
+        ticker: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 20,
+        batch_size: int = 32,
+    ):
+        df_t = features_target[ticker]
+        X = df_t.drop(columns="target").values
+        y = df_t["target"].values
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=test_size, shuffle=False, random_state=random_state
+        )
+
+        scaler = StandardScaler()
+        self.X_train = scaler.fit_transform(X_train)
+        self.X_test = scaler.transform(X_test)
+        self.y_train, self.y_test = y_train, y_test
+
+        self.model = Sequential([
+            Dense(64, activation='relu', input_dim=self.X_train.shape[1]),
+            Dense(64, activation='relu'),
+            Dense(1)
+        ])
+        self.model.compile(optimizer='adam', loss='mse')
+
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def make_forecast(self):
+        self.model.fit(
+            self.X_train, self.y_train,
+            epochs=self.epochs, batch_size=self.batch_size, verbose=0
+        )
+
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+
+        return last_pred, round(r2_tr * 100, 2), r2_tr, r2_te
+
+
+class RidgeRegressionPredictor:
+    def __init__(self, ticker: str, start_date: str, end_date: str, features_target: pd.DataFrame):
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.predictor = Ridge(alpha=1.0)
+        self.data = features_target
+        self.features = features_target[self.ticker].iloc[:, :-1]
+        self.target = features_target[self.ticker]["target"]
+        self.X_train, self.X_test, self.y_train, self.y_test = self.split()
+
+    def split(self, test_size: float = 0.1):
+        return train_test_split(self.features, self.target, test_size=test_size, random_state=42, shuffle=False)
+
+    def make_forecast(self):
+        self.predictor.fit(self.X_train, self.y_train)
+        y_pred = self.predictor.predict(self.X_test)
+
+        acc_score_train = round(self.predictor.score(self.X_train, self.y_train) * 100, 2)
+        r2_train = r2_score(self.y_train, self.predictor.predict(self.X_train))
+        r2_test = r2_score(self.y_test, y_pred)
+
+        return y_pred[-1], acc_score_train, r2_train, r2_test
+
+
+
+class WeightedAverageEnsemble:
+    def __init__(self, predictors: list, weights: list):
+        """
+        Args:
+            predictors: list of predictor instances with make_forecast() method
+            weights: list of weights corresponding to each model
+        """
+        self.predictors = predictors
+        self.weights = np.array(weights) / np.sum(weights)
+
+    def make_forecast(self):
+        preds, r2_train_scores, r2_test_scores = [], [], []
+
+        for model in self.predictors:
+            last_pred, _, r2_train, r2_test = model.make_forecast()
+            preds.append(last_pred)
+            r2_train_scores.append(r2_train)
+            r2_test_scores.append(r2_test)
+
+        weighted_pred = np.dot(preds, self.weights)
+        avg_r2_train = np.dot(r2_train_scores, self.weights)
+        avg_r2_test = np.dot(r2_test_scores, self.weights)
+
+        return weighted_pred, "-", avg_r2_train, avg_r2_test
+
+
