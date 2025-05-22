@@ -17,19 +17,16 @@ from sklearn.svm import SVR
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 
 # Loading DL models
-#
-#
-#
-#
+from tensorflow import keras
+from keras.layers import Dense, LSTM, Conv1D, Flatten
+from keras.models import Sequential, load_model
 
 from sklearn.metrics import accuracy_score
 
 
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense
 
 
-from tensorflow.keras.layers import Conv1D, Flatten, Dense
+
 
 
 # Class for storing the data
@@ -280,41 +277,40 @@ class SVRPredictor():
         return y_pred[-1], acc_score_train, r2_score_train, r2_score_test
 
 
-
-
-
 class LSTMPredictor:
     def __init__(
         self,
         ticker: str,
+        start_date: str,
+        end_date: str,
         features_target: pd.DataFrame,
         test_size: float = 0.1,
         random_state: int = 42,
-        epochs: int = 20,
+        epochs: int = 2,
         batch_size: int = 32
     ):
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date 
+        self.data = features_target
 
-        df_t = features_target[ticker]
-        X = df_t.drop(columns="target").values
-        y = df_t["target"].values
-
-        # 2) train/test split
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
-            test_size=test_size,
-            shuffle=False,
-            random_state=random_state
+        # split once
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
         )
 
+        # scale
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s  = scaler.transform(X_test)
 
+        # reshape for LSTM (samples, time_steps, features)
         self.X_train = X_train_s.reshape((X_train_s.shape[0], 1, X_train_s.shape[1]))
         self.X_test  = X_test_s.reshape((X_test_s.shape[0], 1, X_test_s.shape[1]))
-        self.y_train, self.y_test = y_train, y_test
+        self.y_train = y_train
+        self.y_test  = y_test
 
-
+        # build model
         self.model = Sequential([
             LSTM(50, input_shape=(1, X_train_s.shape[1])),
             Dense(1)
@@ -324,8 +320,18 @@ class LSTMPredictor:
         self.epochs = epochs
         self.batch_size = batch_size
 
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(
+            X, y,
+            test_size=test_size,
+            shuffle=False,
+            random_state=random_state
+        )
+
     def make_forecast(self):
-        # train quietly
+        # train
         self.model.fit(
             self.X_train, self.y_train,
             epochs=self.epochs,
@@ -343,54 +349,51 @@ class LSTMPredictor:
         last_pred = float(y_pred_test[-1])
 
         return (
-            last_pred,
-            round(r2_tr * 100, 2),
-            r2_tr,
-            r2_te
+            last_pred,            # your next-step forecast
+            round(r2_tr * 100, 2),# R² on train in %
+            r2_tr,                # raw R² train
+            r2_te                 # raw R² test
         )
-
 
 
 class CNNPredictor:
     def __init__(
         self,
         ticker: str,
+        start_date: str,
+        end_date: str,
         features_target: pd.DataFrame,
         test_size: float = 0.1,
         random_state: int = 42,
-        epochs: int = 20,
+        epochs: int = 2,
         batch_size: int = 32
     ):
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date 
+        self.data = features_target
 
-
-        df_t = features_target[ticker]
-        X = df_t.drop(columns="target").values
-        y = df_t["target"].values
-
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y,
-            test_size=test_size,
-            shuffle=False,
-            random_state=random_state
+        # split once
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
         )
 
-
+        # scale
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s  = scaler.transform(X_test)
 
+        # reshape for Conv1D (samples, time_steps, features)
+        self.X_train = X_train_s.reshape((X_train_s.shape[0], 1, X_train_s.shape[1]))
+        self.X_test  = X_test_s.reshape((X_test_s.shape[0], 1, X_test_s.shape[1]))
+        self.y_train = y_train
+        self.y_test  = y_test
 
-        n_feat = X_train_s.shape[1]
-        self.X_train = X_train_s.reshape((X_train_s.shape[0], n_feat, 1))
-        self.X_test  = X_test_s.reshape((X_test_s.shape[0],  n_feat, 1))
-        self.y_train, self.y_test = y_train, y_test
-
-
+        # build model
         self.model = Sequential([
-            Conv1D(32, kernel_size=2, activation="relu",
-                   input_shape=(n_feat, 1)),
+            Conv1D(filters=32, kernel_size=1, activation='relu', input_shape=(1, X_train_s.shape[1])),
             Flatten(),
-            Dense(50, activation="relu"),
+            Dense(16, activation='relu'),
             Dense(1)
         ])
         self.model.compile(optimizer="adam", loss="mse")
@@ -398,8 +401,18 @@ class CNNPredictor:
         self.epochs = epochs
         self.batch_size = batch_size
 
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(
+            X, y,
+            test_size=test_size,
+            shuffle=False,
+            random_state=random_state
+        )
+
     def make_forecast(self):
-  
+        # train
         self.model.fit(
             self.X_train, self.y_train,
             epochs=self.epochs,
@@ -407,17 +420,307 @@ class CNNPredictor:
             verbose=0
         )
 
- 
+        # predict
         y_pred_train = self.model.predict(self.X_train)
         y_pred_test  = self.model.predict(self.X_test)
 
+        # metrics
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test,  y_pred_test)
         last_pred = float(y_pred_test[-1])
 
         return (
-            last_pred,
-            round(r2_tr * 100, 2),
-            r2_tr,
-            r2_te
+            last_pred,            # your next-step forecast
+            round(r2_tr * 100, 2),# R² on train in %
+            r2_tr,                # raw R² train
+            r2_te                 # raw R² test
         )
+
+
+
+
+
+class TransformerPredictor:
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 2,
+        batch_size: int = 32
+    ):
+        from tensorflow.keras.layers import Input, Dense, LayerNormalization, Dropout, MultiHeadAttention, Flatten
+        from tensorflow.keras.models import Model
+
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = features_target
+
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
+        )
+        scaler = StandardScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
+
+        # Transformer block
+        input_layer = Input(shape=(X_train_s.shape[1], 1))
+        x = MultiHeadAttention(num_heads=2, key_dim=8)(input_layer, input_layer)
+        x = Flatten()(x)
+        x = Dense(32, activation='relu')(x)
+        x = Dense(1)(x)
+        self.model = Model(inputs=input_layer, outputs=x)
+        self.model.compile(optimizer="adam", loss="mse")
+
+        # reshape for transformer (samples, timesteps, features)
+        self.X_train = X_train_s.reshape((X_train_s.shape[0], X_train_s.shape[1], 1))
+        self.X_test = X_test_s.reshape((X_test_s.shape[0], X_test_s.shape[1], 1))
+        self.y_train = y_train
+        self.y_test = y_test
+
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(X, y, test_size=test_size, shuffle=False, random_state=random_state)
+
+    def make_forecast(self):
+        self.model.fit(self.X_train, self.y_train, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+        return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
+
+
+
+class XGBoostPredictor:
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+
+    ):
+        import xgboost as xgb
+
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = features_target
+
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
+        )
+        scaler = StandardScaler()
+        self.X_train = scaler.fit_transform(X_train)
+        self.X_test = scaler.transform(X_test)
+        self.y_train = y_train
+        self.y_test = y_test
+
+        self.model = xgb.XGBRegressor(random_state=random_state, n_estimators=100)
+
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(X, y, test_size=test_size, shuffle=False, random_state=random_state)
+
+    def make_forecast(self):
+        self.model.fit(self.X_train, self.y_train)
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+        return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
+
+
+
+class MLPPredictor:
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 2,
+        batch_size: int = 32
+    ):
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import Dense
+
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = features_target
+
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
+        )
+        scaler = StandardScaler()
+        X_train_s = scaler.fit_transform(X_train)
+        X_test_s = scaler.transform(X_test)
+        self.X_train = X_train_s
+        self.X_test = X_test_s
+        self.y_train = y_train
+        self.y_test = y_test
+
+        self.model = Sequential([
+            Dense(64, activation="relu", input_shape=(X_train_s.shape[1],)),
+            Dense(32, activation="relu"),
+            Dense(1)
+        ])
+        self.model.compile(optimizer="adam", loss="mse")
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(X, y, test_size=test_size, shuffle=False, random_state=random_state)
+
+    def make_forecast(self):
+        self.model.fit(self.X_train, self.y_train, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+        return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
+
+
+class RidgeRegressionPredictor:
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+
+    ):
+        from sklearn.linear_model import Ridge
+
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = features_target
+
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
+        )
+        scaler = StandardScaler()
+        self.X_train = scaler.fit_transform(X_train)
+        self.X_test = scaler.transform(X_test)
+        self.y_train = y_train
+        self.y_test = y_test
+
+        self.model = Ridge(alpha=1.0)
+
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(X, y, test_size=test_size, shuffle=False, random_state=random_state)
+
+    def make_forecast(self):
+        self.model.fit(self.X_train, self.y_train)
+        y_pred_train = self.model.predict(self.X_train)
+        y_pred_test = self.model.predict(self.X_test)
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+        return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
+
+
+
+
+
+class WeightedAverageEnsemble:
+    def __init__(
+        self,
+        ticker: str,
+        start_date: str,
+        end_date: str,
+        features_target: pd.DataFrame,
+        test_size: float = 0.1,
+        random_state: int = 42,
+        epochs: int = 1, 
+        batch_size: int = 32  
+    ):
+        # Ensemble of: Ridge, XGBoost, MLP
+        from sklearn.linear_model import Ridge
+        import xgboost as xgb
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import Dense
+
+        self.ticker = ticker
+        self.start_date = start_date
+        self.end_date = end_date
+        self.data = features_target
+
+        X_train, X_test, y_train, y_test = self._split(
+            features_target[self.ticker], test_size, random_state
+        )
+        scaler = StandardScaler()
+        self.X_train = scaler.fit_transform(X_train)
+        self.X_test = scaler.transform(X_test)
+        self.y_train = y_train
+        self.y_test = y_test
+
+        # Models
+        self.ridge = Ridge(alpha=1.0)
+        self.xgb = xgb.XGBRegressor(random_state=random_state, n_estimators=100)
+        self.mlp = Sequential([
+            Dense(64, activation="relu", input_shape=(self.X_train.shape[1],)),
+            Dense(32, activation="relu"),
+            Dense(1)
+        ])
+        self.mlp.compile(optimizer="adam", loss="mse")
+
+        # Weights for ensemble: [ridge, xgb, mlp]
+        self.weights = [0.3, 0.3, 0.4]
+        self.epochs = epochs
+        self.batch_size = batch_size
+
+    def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
+        X = df.drop(columns="target").values
+        y = df["target"].values
+        return train_test_split(X, y, test_size=test_size, shuffle=False, random_state=random_state)
+
+    def make_forecast(self):
+        # Train all models
+        self.ridge.fit(self.X_train, self.y_train)
+        self.xgb.fit(self.X_train, self.y_train)
+        self.mlp.fit(self.X_train, self.y_train, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
+
+        # Predict and ensemble
+        pred_train = [
+            self.ridge.predict(self.X_train),
+            self.xgb.predict(self.X_train),
+            self.mlp.predict(self.X_train).flatten()
+        ]
+        pred_test = [
+            self.ridge.predict(self.X_test),
+            self.xgb.predict(self.X_test),
+            self.mlp.predict(self.X_test).flatten()
+        ]
+        y_pred_train = sum(w * p for w, p in zip(self.weights, pred_train))
+        y_pred_test = sum(w * p for w, p in zip(self.weights, pred_test))
+
+        r2_tr = r2_score(self.y_train, y_pred_train)
+        r2_te = r2_score(self.y_test, y_pred_test)
+        last_pred = float(y_pred_test[-1])
+        return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
