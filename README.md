@@ -1,4 +1,13 @@
 # Financial-Engineering-Capstone-Project
 MSc in Financial Engineering capstone project repository for Portfolio Optimization
 
-This capstone project investigates and compares the effectiveness of DL and ML-based approaches to portfolio optimization with two traditional portfolio optimization methods: Mean-variance and Black-Litterman models for cryptocurrencies, stocks and ETFs. Traditional portfolio optimization methods are known for their reliance on rigid assumptions about asset return distributions and correlations, static market relationships, therefore make them less effective in today’s volatile and data-rich markets. To address the non-linear and non-dynamic challenges posed by the traditional methods, and to enhance performance, we develop ten predictive DL and ML models: MLP, LSTM, CNN XGBoost, Transfomer, Decision Tree, SVR, ensemble learning. We collect historical daily returns of two crypto assets, 8 US stocks, from 2017 to 2024 from yfinance to forecast asset behaviors. Performance is evaluated through back testing framework under realistic trading constraints, using annualized returns: Cumulative Return, lagged returns, Sharpe Ratio, maximum drawdown, Hit ratio, Turnover. ML/DL-based strategies prove to outperform the traditional models most especially under volatile market conditions. 
+The rise of cryptocurrencies alongside traditional stocks presents new challenges 
+for portfolio optimization. While traditional portfolio optimization methods such as 
+Mean-Variance and Black-Litterman are robust, we need portfolio optimization to be 
+more adaptive and intelligent in the current world to optimize strategies for 
+investment. This study explores portfolio optimization using ML and DL models to 
+determine whether these types of advanced models can outperform traditional models. 
+We aim to integrated at least ten predictive models' power, including MLP, LSTM, 
+CNN, XGBoost, Transformer, Decision Tree, SVR, Linear Regression, Ridge 
+Regression, and ensemble learning. We will evaluate these models by using daily 
+returns data from two cryptocurrencies and 9 stocks from 2018 to 2024. 
