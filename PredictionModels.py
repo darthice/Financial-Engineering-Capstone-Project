@@ -40,7 +40,9 @@ class DataStore():
         self.start_date = start_date
         self.end_date = end_date
         self.period = period
+        # retrieve price and return data
         self.data = self.get_data()
+        # calculate features and target variable
         self.features_target = self.getfeatures()
         self.caps = caps
 
@@ -83,12 +85,14 @@ class DataStore():
         }
         features = pd.DataFrame()
         feat_tuples = []
-        
+
+        # Calculate each feature for every ticker
         for ticker in self.tickers:
             for feature in feature_functions.keys():
                 features[(ticker, feature)] = feature_functions[feature](ticker)
                 feat_tuples.append((ticker, feature))
-        
+
+        # Set column multi-index and drop rows with any missing values
         features.columns = pd.MultiIndex.from_tuples(feat_tuples) 
         features = features.dropna()
 
@@ -111,8 +115,10 @@ class DesicionTreeRegressorPredictor():
         self.ticker = ticker
         self.start_date = start_date
         self.end_date = end_date 
+        # Initialize Decision Tree model
         self.predictor = DecisionTreeRegressor(random_state=42)
         self.data = features_target
+        # Extract features and target columns for this ticker
         self.features = features_target[self.ticker].iloc[:, :-1]
         self.target = features_target[self.ticker]["target"]
         self.X_train = self.split()[0]
@@ -152,7 +158,8 @@ class DesicionTreeRegressorPredictor():
         acc_score_train = round(self.predictor.score(self.X_train, self.y_train)*100, 2)
         r2_score_train = r2_score(self.y_train, self.predictor.predict(self.X_train))
         r2_score_test = r2_score(self.y_test, y_pred)
-        
+
+        # Return forecast (last prediction) and metrics
         return y_pred[-1], acc_score_train, r2_score_train, r2_score_test
 
 
@@ -212,7 +219,8 @@ class LinearRegressionPredictor():
         acc_score_train = round(self.predictor.score(self.X_train, self.y_train)*100, 2)
         r2_score_train = r2_score(self.y_train, self.predictor.predict(self.X_train))
         r2_score_test = r2_score(self.y_test, y_pred)
-        
+
+        # Return forecast (last prediction) and metrics
         return y_pred[-1], acc_score_train, r2_score_train, r2_score_test
 
 
@@ -274,6 +282,7 @@ class SVRPredictor():
         r2_score_train = r2_score(self.y_train, self.predictor.predict(self.X_train))
         r2_score_test = r2_score(self.y_test, y_pred)
 
+        # Return forecast (last prediction) and metrics
         return y_pred[-1], acc_score_train, r2_score_train, r2_score_test
 
 
@@ -347,7 +356,7 @@ class LSTMPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test,  y_pred_test)
         last_pred = float(y_pred_test[-1])
-
+        # Return forecast (last prediction) and metrics
         return (
             last_pred,            # your next-step forecast
             round(r2_tr * 100, 2),# R² on train in %
@@ -428,7 +437,7 @@ class CNNPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test,  y_pred_test)
         last_pred = float(y_pred_test[-1])
-
+        # Return forecast (last prediction) and metrics
         return (
             last_pred,            # your next-step forecast
             round(r2_tr * 100, 2),# R² on train in %
@@ -463,6 +472,8 @@ class TransformerPredictor:
         X_train, X_test, y_train, y_test = self._split(
             features_target[self.ticker], test_size, random_state
         )
+
+        # Standardize features
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s = scaler.transform(X_test)
@@ -497,6 +508,7 @@ class TransformerPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test, y_pred_test)
         last_pred = float(y_pred_test[-1])
+        # Return forecast (last prediction) and metrics
         return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
 
 
@@ -522,6 +534,8 @@ class XGBoostPredictor:
         X_train, X_test, y_train, y_test = self._split(
             features_target[self.ticker], test_size, random_state
         )
+
+        # Standardize features
         scaler = StandardScaler()
         self.X_train = scaler.fit_transform(X_train)
         self.X_test = scaler.transform(X_test)
@@ -542,6 +556,7 @@ class XGBoostPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test, y_pred_test)
         last_pred = float(y_pred_test[-1])
+        # Return forecast (last prediction) and metrics
         return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
 
 
@@ -569,6 +584,7 @@ class MLPPredictor:
         X_train, X_test, y_train, y_test = self._split(
             features_target[self.ticker], test_size, random_state
         )
+        # Standardize features
         scaler = StandardScaler()
         X_train_s = scaler.fit_transform(X_train)
         X_test_s = scaler.transform(X_test)
@@ -598,6 +614,7 @@ class MLPPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test, y_pred_test)
         last_pred = float(y_pred_test[-1])
+        # Return forecast (last prediction) and metrics
         return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
 
 
@@ -618,16 +635,17 @@ class RidgeRegressionPredictor:
         self.start_date = start_date
         self.end_date = end_date
         self.data = features_target
-
+        # Train-test split
         X_train, X_test, y_train, y_test = self._split(
             features_target[self.ticker], test_size, random_state
         )
+        # Standardize features
         scaler = StandardScaler()
         self.X_train = scaler.fit_transform(X_train)
         self.X_test = scaler.transform(X_test)
         self.y_train = y_train
         self.y_test = y_test
-
+        # Initialize Ridge regression model
         self.model = Ridge(alpha=1.0)
 
     def _split(self, df: pd.DataFrame, test_size: float, random_state: int):
@@ -642,6 +660,7 @@ class RidgeRegressionPredictor:
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test, y_pred_test)
         last_pred = float(y_pred_test[-1])
+        # Return forecast (last prediction) and metrics
         return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
 
 
@@ -670,7 +689,7 @@ class WeightedAverageEnsemble:
         self.start_date = start_date
         self.end_date = end_date
         self.data = features_target
-
+        # Train-test split
         X_train, X_test, y_train, y_test = self._split(
             features_target[self.ticker], test_size, random_state
         )
@@ -680,7 +699,7 @@ class WeightedAverageEnsemble:
         self.y_train = y_train
         self.y_test = y_test
 
-        # Models
+        # Model initialization
         self.ridge = Ridge(alpha=1.0)
         self.xgb = xgb.XGBRegressor(random_state=random_state, n_estimators=100)
         self.mlp = Sequential([
@@ -706,7 +725,7 @@ class WeightedAverageEnsemble:
         self.xgb.fit(self.X_train, self.y_train)
         self.mlp.fit(self.X_train, self.y_train, epochs=self.epochs, batch_size=self.batch_size, verbose=0)
 
-        # Predict and ensemble
+        # Generate predictions for train and test sets
         pred_train = [
             self.ridge.predict(self.X_train),
             self.xgb.predict(self.X_train),
@@ -717,10 +736,13 @@ class WeightedAverageEnsemble:
             self.xgb.predict(self.X_test),
             self.mlp.predict(self.X_test).flatten()
         ]
+        # Weighted average of model predictions
         y_pred_train = sum(w * p for w, p in zip(self.weights, pred_train))
         y_pred_test = sum(w * p for w, p in zip(self.weights, pred_test))
-
+        
+        # Compute performance metrics
         r2_tr = r2_score(self.y_train, y_pred_train)
         r2_te = r2_score(self.y_test, y_pred_test)
         last_pred = float(y_pred_test[-1])
+        # Return forecast (last prediction) and metrics
         return (last_pred, round(r2_tr * 100, 2), r2_tr, r2_te)
